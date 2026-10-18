@@ -1,4 +1,4 @@
-# SingleAIChat
+# JustAIChat
 
 一个基于 Svelte、TypeScript 和 Vite 的浏览器聊天应用，支持自定义 OpenAI 兼容 API、会话本地保存与导入导出，以及 Markdown、公式和代码高亮。AI 回复中的 HTML、SVG、Typst 和 LaTeX 代码块可以点击运行预览。
 
