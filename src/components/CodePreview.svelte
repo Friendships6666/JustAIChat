@@ -39,14 +39,14 @@
 </div>
 
 <style>
-  .preview-tool { margin: .5rem 0 1rem; border: 1px solid #dbe3ee; border-radius: 6px; overflow: hidden; background: #fff; }
-  .preview-bar { min-height: 36px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 .5rem 0 .75rem; background: #f6f8fb; color: #526174; font: 11px ui-monospace, monospace; }
+  .preview-tool { margin: .5rem 0 1rem; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: #fff; }
+  .preview-bar { min-height: 36px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 .5rem 0 .75rem; background: var(--surface-soft); color: #526174; font: 11px ui-monospace, monospace; }
   .preview-actions { display: flex; align-items: center; gap: 3px; }
   button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 27px; height: 27px; border: 0; border-radius: 4px; background: transparent; color: #526174; font: 11px ui-monospace, monospace; cursor: pointer; }
-  button:hover { background: #e8eef8; color: #3454ba; }
-  .run-button { padding: 0 7px; color: #3454ba; }
-  .preview-canvas { height: 320px; min-height: 160px; resize: vertical; overflow: auto; background: #fff; border-top: 1px solid #dbe3ee; }
-  .preview-status { padding: 1rem; border-top: 1px solid #dbe3ee; color: #64748b; font-size: 12px; }
+  button:hover { background: var(--accent-soft); color: var(--accent-hover); }
+  .run-button { padding: 0 7px; color: var(--accent-hover); }
+  .preview-canvas { height: 320px; min-height: 160px; resize: vertical; overflow: auto; background: #fff; border-top: 1px solid var(--border); }
+  .preview-status { padding: 1rem; border-top: 1px solid var(--border); color: #64748b; font-size: 12px; }
   .preview-error { color: #b91c1c; white-space: pre-wrap; overflow-wrap: anywhere; }
   iframe { display: block; width: 100%; height: 100%; border: 0; background: #fff; }
 </style>

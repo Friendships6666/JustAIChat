@@ -53,3 +53,78 @@ test('sends ultra and model-specific reasoning effort names unchanged', async ()
     globalThis.fetch = originalFetch;
   }
 });
+
+test('uses only the explicitly configured relay and preserves the request payload', async () => {
+  const originalFetch = globalThis.fetch;
+  let sent;
+  globalThis.fetch = async (url, options) => {
+    sent = { url, options };
+    return new Response('data: {"choices":[{"delta":{"content":"OK"}}]}\n\n');
+  };
+  try {
+    const config = { baseUrl: 'https://api.example.com/v1', relayBaseUrl: 'https://relay.example.com/v1/',
+      apiKey: 'test-secret', model: 'test-model', systemPrompt: '', temperature: 0.7, reasoningEffort: 'medium' };
+    const messages = [{ role: 'user', content: 'Hi' }];
+    const statuses = [];
+    const result = await streamCompletion(config, messages, new AbortController().signal,
+      () => {}, () => {}, (stage, detail) => statuses.push(`${stage} ${detail}`));
+    assert.equal(result, 'OK');
+    assert.equal(sent.url, 'https://relay.example.com/v1/chat/completions');
+    assert.equal(sent.options.headers.Authorization, 'Bearer test-secret');
+    assert.deepEqual(JSON.parse(sent.options.body).messages, messages);
+    assert.match(statuses.join('\n'), /用户配置的转发/);
+    assert.doesNotMatch(statuses.join('\n'), /test-secret/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('explains ambiguous network failures without automatically retrying through another service', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async url => {
+    requests.push(url);
+    throw new TypeError('Failed to fetch');
+  };
+  try {
+    await assert.rejects(streamCompletion(
+      { baseUrl: 'https://api.example.com/v1', apiKey: '', model: 'test-model', systemPrompt: '',
+        temperature: 0.7, reasoningEffort: 'medium' },
+      [{ role: 'user', content: 'Hi' }], new AbortController().signal, () => {}, () => {}
+    ), /可能是网络、证书或跨域限制/);
+    assert.deepEqual(requests, ['https://api.example.com/v1/chat/completions']);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('preserves cancellation instead of misreporting it as a network failure', async () => {
+  const originalFetch = globalThis.fetch;
+  const controller = new AbortController();
+  const aborted = new DOMException('Stopped', 'AbortError');
+  globalThis.fetch = async () => { controller.abort(); throw aborted; };
+  try {
+    await assert.rejects(streamCompletion(
+      { baseUrl: 'https://api.example.com/v1', apiKey: '', model: 'test-model', systemPrompt: '',
+        temperature: 0.7, reasoningEffort: 'medium' },
+      [{ role: 'user', content: 'Hi' }], controller.signal, () => {}, () => {}
+    ), error => error === aborted);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('rejects static HTML fallback pages rather than treating them as an empty chat response', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response('<!doctype html><title>Static page</title>',
+    { headers: { 'content-type': 'text/html; charset=utf-8' } });
+  try {
+    await assert.rejects(streamCompletion(
+      { baseUrl: 'https://api.example.com/v1', relayBaseUrl: 'https://relay.example.com/v1',
+        apiKey: '', model: 'test-model', systemPrompt: '', temperature: 0.7, reasoningEffort: 'medium' },
+      [{ role: 'user', content: 'Hi' }], new AbortController().signal, () => {}, () => {}
+    ), /真实的后端服务/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

@@ -62,7 +62,7 @@ test('local storage preserves image content without conversion', () => {
     addNode(session, 'user', [{ type: 'text', text: 'Image' },
       { type: 'image_url', image_url: { url: imageData } }]);
     assert.equal(saveWorkspace({ version: 1, activeSessionId: session.id, sessions: [session] }), true);
-    assert.equal(JSON.parse(values.get('stupidchat_workspace_v1')).sessions[0].nodes[0].content[1].image_url.url, imageData);
+    assert.equal(JSON.parse(values.get('justaichat_workspace_v1')).sessions[0].nodes[0].content[1].image_url.url, imageData);
   } finally {
     globalThis.localStorage = originalStorage;
   }
@@ -73,7 +73,8 @@ test('exports original image content without replacing it with a placeholder', a
   const originalCreate = URL.createObjectURL;
   const originalRevoke = URL.revokeObjectURL;
   let exportedBlob;
-  globalThis.document = { createElement: () => ({ click() {} }) };
+  const link = { click() {} };
+  globalThis.document = { createElement: () => link };
   URL.createObjectURL = blob => { exportedBlob = blob; return 'blob:memory'; };
   URL.revokeObjectURL = () => {};
   try {
@@ -83,6 +84,8 @@ test('exports original image content without replacing it with a placeholder', a
       { type: 'image_url', image_url: { url: imageData } }]);
     exportWorkspace({ version: 1, activeSessionId: session.id, sessions: [session] });
     const exported = JSON.parse(await exportedBlob.text());
+    assert.equal(exported.format, 'justaichat-memory');
+    assert.match(link.download, /^justaichat-memory-\d{4}-\d{2}-\d{2}\.json$/);
     assert.equal(exported.workspace.sessions[0].nodes[0].content[1].image_url.url, imageData);
     await new Promise(resolve => setTimeout(resolve, 0));
   } finally {

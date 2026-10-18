@@ -92,15 +92,15 @@
     font: 11px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace;
   }
 
-  .connection-heading { display: flex; align-items: center; gap: .55rem; padding-bottom: .45rem; border-bottom: 1px solid #e3e9f1; }
-  .connection-heading strong { color: #263c55; font-size: 12px; }
-  .connection-indicator { width: 7px; height: 7px; flex: none; border-radius: 50%; background: #1f9d75; box-shadow: 0 0 0 3px #d9f4e9; }
+  .connection-heading { display: flex; align-items: center; gap: .55rem; padding-bottom: .45rem; border-bottom: 1px solid var(--border); }
+  .connection-heading strong { color: var(--accent-hover); font-size: 12px; }
+  .connection-indicator { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   .connection-indicator.error { background: #ce4659; box-shadow: 0 0 0 3px #fde6e8; }
   .connection-clock { margin-left: auto; color: #768598; font-variant-numeric: tabular-nums; }
   .connection-lines { list-style: none; margin: .5rem 0; padding: 0; max-height: 13rem; overflow-y: auto; }
   .connection-lines li { display: grid; grid-template-columns: 4.6rem 4.7rem minmax(0, 1fr); gap: .45rem; padding: .13rem 0; }
   .connection-time { color: #8b98a8; font-variant-numeric: tabular-nums; }
-  .connection-stage { color: #3f66ab; font-weight: 700; }
+  .connection-stage { color: var(--accent); font-weight: 700; }
   .connection-detail { min-width: 0; overflow-wrap: anywhere; }
   .connection-waiting { color: #697b8e; padding-top: .25rem; }
   .connection-error { color: #b91c1c; overflow-wrap: anywhere; padding-top: .25rem; }

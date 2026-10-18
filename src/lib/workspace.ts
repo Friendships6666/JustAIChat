@@ -1,14 +1,24 @@
 import type { Config, Content, MessageNode, ReasoningEffort, Role, Session, Workspace } from '../types';
 
-const CONFIG_KEY = 'stupidchat_config';
+const CONFIG_KEY = 'justaichat_config';
 const HISTORY_KEY = 'stupidchat_history';
-const WORKSPACE_KEY = 'stupidchat_workspace_v1';
+const WORKSPACE_KEY = 'justaichat_workspace_v1';
 const TRUNCATED_CONTENT = '[内容过长，已在本地历史中截断]';
 const MISSING_IMAGE = '[图片附件仅在当前会话中可用]';
 
 function readJson<T>(key: string, fallback: T): T {
   try { return JSON.parse(localStorage.getItem(key) || 'null') || fallback; }
   catch { return fallback; }
+}
+
+function readMigratedJson<T>(key: string, legacyKey: string, fallback: T): T {
+  const current = readJson<T | null>(key, null);
+  if (current !== null) return current;
+  const legacy = readJson<T | null>(legacyKey, null);
+  if (legacy === null) return fallback;
+  try { localStorage.setItem(key, JSON.stringify(legacy)); }
+  catch {}
+  return legacy;
 }
 
 export function createId(): string {
@@ -24,7 +34,7 @@ export function isWorkspace(value: unknown): value is Workspace {
   return data.version === 1 && Array.isArray(data.sessions) && data.sessions.length > 0;
 }
 export function loadWorkspace(): Workspace {
-  const saved = readJson<unknown>(WORKSPACE_KEY, null);
+  const saved = readMigratedJson<unknown>(WORKSPACE_KEY, 'stupidchat_workspace_v1', null);
   if (isWorkspace(saved)) return saved;
   const legacy = readJson<{ role: Role; content: Content }[]>(HISTORY_KEY, []);
   const session = createSession(legacy.length ? '已迁移对话' : '新对话');
@@ -33,7 +43,7 @@ export function loadWorkspace(): Workspace {
 }
 export function loadConfig(): Config {
   const config = { baseUrl: '', apiKey: '', model: '', systemPrompt: '', temperature: 0.7,
-    reasoningEffort: 'medium' as ReasoningEffort, ...readJson<Partial<Config>>(CONFIG_KEY, {}) };
+    reasoningEffort: 'medium' as ReasoningEffort, ...readMigratedJson<Partial<Config>>(CONFIG_KEY, 'stupidchat_config', {}) };
   if (typeof config.reasoningEffort !== 'string' || !config.reasoningEffort.trim()) config.reasoningEffort = 'medium';
   return config;
 }
@@ -72,8 +82,8 @@ export function hasIncompleteHistory(session: Session): boolean {
     return parts.some(text => text.includes(TRUNCATED_CONTENT) || text === MISSING_IMAGE);
   });
 }
-export function addNode(session: Session, role: Role, content: Content): MessageNode {
-  const node: MessageNode = { id: createId(), parentId: session.activeNodeId, role, content, createdAt: Date.now() };
+export function addNode(session: Session, role: Role, content: Content, id = createId()): MessageNode {
+  const node: MessageNode = { id, parentId: session.activeNodeId, role, content, createdAt: Date.now() };
   session.nodes.push(node);
   session.activeNodeId = node.id;
   session.updatedAt = node.createdAt;
@@ -91,18 +101,18 @@ export function saveWorkspace(workspace: Workspace): boolean {
   } catch { return false; }
 }
 export function exportWorkspace(workspace: Workspace): void {
-  const data = { format: 'singleaichat-memory', version: 1, exportedAt: new Date().toISOString(), workspace };
+  const data = { format: 'justaichat-memory', version: 1, exportedAt: new Date().toISOString(), workspace };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const link = document.createElement('a');
   link.href = url;
-  link.download = `singleaichat-memory-${new Date().toISOString().slice(0, 10)}.json`;
+  link.download = `justaichat-memory-${new Date().toISOString().slice(0, 10)}.json`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 export async function importWorkspace(file: File, workspace: Workspace): Promise<Workspace> {
   const data: unknown = JSON.parse(await file.text());
   const wrapped = data as { format?: string; workspace?: unknown };
-  const source = wrapped?.format === 'stupidchat-memory' || wrapped?.format === 'singleaichat-memory' ? wrapped.workspace : data;
+  const source = ['justaichat-memory', 'singleaichat-memory', 'stupidchat-memory'].includes(wrapped?.format || '') ? wrapped.workspace : data;
   if (!isWorkspace(source)) throw new Error('文件格式不正确');
   if (!source.sessions.every(item => Array.isArray(item.nodes))) throw new Error('文件格式不正确');
   const sessions = source.sessions.map(old => {

@@ -5,9 +5,10 @@
   import Composer from './components/Composer.svelte';
   import SettingsModal from './components/SettingsModal.svelte';
   import { streamCompletion } from './lib/api';
+  import { completionEndpoint } from './lib/apiEndpoint';
   import { makeUserContent, readAttachments } from './lib/attachments';
   import { loadExactWorkspace, saveExactWorkspace } from './lib/exactWorkspace';
-  import { activeSession, addNode, buildRequestMessages, createSession, exportWorkspace, hasIncompleteHistory, importWorkspace, loadConfig, loadWorkspace, nodePath, saveConfig, saveWorkspace } from './lib/workspace';
+  import { activeSession, addNode, buildRequestMessages, createId, createSession, exportWorkspace, hasIncompleteHistory, importWorkspace, loadConfig, loadWorkspace, nodePath, saveConfig, saveWorkspace } from './lib/workspace';
   import type { Attachment, Config, Usage, Workspace } from './types';
 
   let config: Config = loadConfig();
@@ -22,6 +23,7 @@
   let generating = false;
   let streaming = '';
   let streamingSessionId: string | null = null;
+  let streamingMessageId: string | null = null;
   let connectionLogs: { elapsed: number; stage: string; detail: string }[] = [];
   let connectionElapsed = 0;
   let connectionStartedAt = 0;
@@ -32,12 +34,15 @@
   let chatBox: HTMLElement;
   $: session = activeSession(workspace);
   $: messages = nodePath(session);
+  $: displayedMessages = streamingSessionId === session.id && streamingMessageId && !messages.some(node => node.id === streamingMessageId)
+    ? [...messages, { id: streamingMessageId, role: 'assistant' as const, content: streaming }]
+    : messages;
   $: sessions = [...workspace.sessions].sort((a, b) => b.updatedAt - a.updatedAt);
 
   onMount(() => {
     void loadExactWorkspace().then(saved => {
       if (saved) workspace = saved;
-      else void saveExactWorkspace(workspace).catch(() => exactStorageError = true);
+      void saveExactWorkspace(workspace).catch(() => exactStorageError = true);
     }).catch(() => exactStorageError = true).finally(() => restoringHistory = false);
     if (matchMedia('(max-width: 899px)').matches) sidebarOpen = false;
     if (!config.baseUrl || !config.model) setTimeout(() => settingsOpen = true, 300);
@@ -111,11 +116,13 @@
     connectionLogs = [];
     connectionElapsed = 0;
     streamingSessionId = current.id;
+    const responseId = createId();
+    streamingMessageId = responseId;
     requestController = new AbortController();
     const requestMessages = buildRequestMessages(current, current.systemPrompt);
     connectionStartedAt = performance.now();
     let endpoint = '自定义端点';
-    try { const url = new URL(`${config.baseUrl}/chat/completions`); endpoint = `${url.host}${url.pathname}`; }
+    try { const url = new URL(completionEndpoint(config.baseUrl, config.relayBaseUrl)); endpoint = `${url.host}${url.pathname}`; }
     catch { /* fetch will report an invalid URL. */ }
     logConnection('TARGET', endpoint);
     logConnection('MODEL', config.model);
@@ -128,11 +135,11 @@
           streaming = value;
         }, value => usage = value,
         (stage, detail) => { if (!streaming) logConnection(stage, detail); });
-      addNode(current, 'assistant', response);
+      addNode(current, 'assistant', response, responseId);
       await refresh();
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        if (streaming) { addNode(current, 'assistant', streaming); await refresh(); }
+        if (streaming) { addNode(current, 'assistant', streaming, responseId); await refresh(); }
       } else {
         requestError = { sessionId: current.id, message: `请求失败: ${error instanceof Error ? error.message : String(error)}`,
           logs: connectionLogs, elapsed: connectionElapsed };
@@ -141,6 +148,7 @@
       stopLogClock();
       generating = false;
       streamingSessionId = null;
+      streamingMessageId = null;
       requestController = null;
     }
   }
@@ -148,7 +156,7 @@
 
 <div class:sidebar-hidden={!sidebarOpen} class="app-shell">
   <header class="topbar">
-    <div class="brand-group"><span class="brand">SingleAIChat</span><span class="model-badge" title={config.model}>{config.model || '未设置模型'}</span><span class="host-badge" title={config.baseUrl}>{config.baseUrl ? `(${config.baseUrl})` : '(无 API 接口)'}</span></div>
+    <div class="brand-group"><span class="brand"><img class="brand-logo" src={`${import.meta.env.BASE_URL}logo.svg`} alt=""/>JustAIChat</span><span class="model-badge" title={config.model}>{config.model || '未设置模型'}</span><span class="host-badge" title={config.baseUrl}>{config.baseUrl ? `(${config.baseUrl})` : '(无 API 接口)'}</span></div>
     <div class="toolbar">
       <button class="icon-button" title="新建对话" aria-label="新建对话" disabled={restoringHistory} onclick={newChat}><Plus size={18}/></button>
       <button class="icon-button" title="会话列表" aria-label="会话列表" onclick={() => sidebarOpen = !sidebarOpen}><PanelLeft size={18}/></button>
@@ -161,9 +169,8 @@
   </header>
   {#if sidebarOpen}<aside class="sidebar"><div class="sidebar-heading"><span>会话列表</span><button class="icon-button" title="关闭会话列表" aria-label="关闭会话列表" onclick={() => sidebarOpen = false}><X size={17}/></button></div><nav aria-label="会话列表">{#each sessions as item (item.id)}<button class:active={item.id === session.id} disabled={restoringHistory} title={item.title} onclick={() => selectSession(item.id)}>{item.title || '未命名对话'}</button>{/each}</nav></aside>{/if}
   <main bind:this={chatBox} class="chat-box">
-    {#if !messages.length && streamingSessionId !== session.id}<div class="welcome"><h1>SingleAIChat</h1><button class="primary-button" onclick={() => settingsOpen = true}>立即前往配置 API</button></div>{/if}
-    {#each messages as node (node.id)}<ChatMessage role={node.role} content={node.content}/>{/each}
-    {#if streamingSessionId === session.id && generating}<ChatMessage role="assistant" content={streaming} streaming={true} {connectionLogs} {connectionElapsed}/>{/if}
+    {#if !messages.length && streamingSessionId !== session.id}<div class="welcome"><img class="welcome-logo" src={`${import.meta.env.BASE_URL}logo.svg`} alt="JustAIChat 标志"/><h1>JustAIChat</h1><button class="primary-button" onclick={() => settingsOpen = true}>立即前往配置 API</button></div>{/if}
+    {#each displayedMessages as node (node.id)}<ChatMessage role={node.role} content={node.content} streaming={node.id === streamingMessageId && generating} {connectionLogs} {connectionElapsed}/>{/each}
     {#if requestError?.sessionId === session.id}
       {#if requestError.logs.length}<ChatMessage role="assistant" content="" streaming={true} connectionLogs={requestError.logs} connectionElapsed={requestError.elapsed} connectionError={requestError.message}/>
       {:else}<div class="request-error">{requestError.message}</div>{/if}
@@ -176,6 +183,9 @@
 </div>
 
 <style>
+  .brand { display: inline-flex; align-items: center; gap: .5rem; }
+  .brand-logo { width: 27px; height: 27px; flex: none; }
+  .welcome-logo { display: block; width: 80px; height: 80px; margin: 0 auto 1.1rem; filter: drop-shadow(0 8px 14px #c9364f26); }
   @media (max-width: 600px) {
     .model-badge { display: none; }
     .brand { font-size: 13px; }

@@ -1,4 +1,5 @@
 import type { Config, Content, Role, Usage } from '../types';
+import { completionEndpoint } from './apiEndpoint.ts';
 
 interface ApiMessage { role: Role | 'system'; content: Content }
 interface Chunk {
@@ -14,21 +15,29 @@ export async function streamCompletion(
   onContent: (value: string) => void, onUsage: (usage: Usage) => void,
   onStatus: (stage: string, detail: string) => void = () => {}
 ): Promise<string> {
+  const endpoint = completionEndpoint(config.baseUrl, config.relayBaseUrl);
   const body = JSON.stringify({ model: config.model, messages, temperature: config.temperature,
     reasoning_effort: config.reasoningEffort,
     stream: true, stream_options: { include_usage: true } });
   onStatus('握手', 'POST /chat/completions · 等待响应头');
   onStatus('PAYLOAD', `${new TextEncoder().encode(body).byteLength} B · SSE 流式响应`);
-  const response = await fetch(`${config.baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey || ''}` },
-    body,
-    signal
-  });
+  onStatus('ROUTE', config.relayBaseUrl?.trim() ? '使用用户配置的转发服务' : '浏览器直接连接接口');
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey || ''}` },
+      body,
+      signal
+    });
+  } catch (error) {
+    if (signal.aborted || !(error instanceof TypeError)) throw error;
+    throw new Error('请求未能连接。可能是网络、证书或跨域限制，请查看浏览器控制台确认。纯静态页面无法绕过跨域限制；请使用允许本站访问的接口，或手动配置可信转发服务。');
+  }
   onStatus('HTTP', `${response.status} ${response.statusText || ''}`.trim());
   onStatus('协商', response.headers.get('content-type') || '未提供 Content-Type');
   for (const [header, label] of [
-    ['x-request-id', 'Request ID'], ['openai-request-id', 'Request ID'],
+    ['x-request-id', 'Request ID'],
     ['cf-ray', 'Edge ID'], ['server-timing', 'Server Timing'],
     ['x-ratelimit-remaining-requests', '剩余请求'],
     ['x-ratelimit-remaining-tokens', '剩余 Token']
@@ -37,6 +46,9 @@ export async function streamCompletion(
     if (value) onStatus('META', `${label}: ${value}`);
   }
   if (!response.ok) throw new Error(`[HTTP ${response.status}] ${await response.text()}`);
+  if (response.headers.get('content-type')?.toLowerCase().includes('text/html')) {
+    throw new Error('请求地址返回了网页，而不是聊天数据。请确认接口路径正确；转发地址需要真实的后端服务，不能只填写静态页面地址。');
+  }
   if (!response.body) throw new Error('响应不支持流式读取');
   onStatus('STREAM', '响应体已连接 · 等待首个数据帧');
   const reader = response.body.getReader();

@@ -5,6 +5,6 @@ export interface MessageNode { id: string; parentId: string | null; role: Role; 
 export interface Session { id: string; title: string; createdAt: number; updatedAt: number; activeNodeId: string | null; nodes: MessageNode[]; systemPrompt?: string }
 export interface Workspace { version: 1; activeSessionId: string; sessions: Session[] }
 export type ReasoningEffort = string;
-export interface Config { baseUrl: string; apiKey: string; model: string; systemPrompt: string; temperature: number; reasoningEffort: ReasoningEffort }
+export interface Config { baseUrl: string; relayBaseUrl?: string; apiKey: string; model: string; systemPrompt: string; temperature: number; reasoningEffort: ReasoningEffort }
 export interface Attachment { name: string; size: number; isImage: boolean; data: string; ext: string }
 export interface Usage { prompt_tokens: number; completion_tokens: number; total_tokens: number }

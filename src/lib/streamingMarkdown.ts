@@ -2,6 +2,7 @@ export function completedMarkdownOffset(text: string): number {
   let completed = 0;
   let offset = 0;
   let fence: { marker: string; length: number } | null = null;
+  let mathClosing: string | null = null;
 
   while (offset < text.length) {
     const newline = text.indexOf('\n', offset);
@@ -15,9 +16,17 @@ export function completedMarkdownOffset(text: string): number {
         fence = null;
         completed = end;
       }
+    } else if (mathClosing) {
+      if (line.trim() === mathClosing) {
+        mathClosing = null;
+        completed = end;
+      }
     } else if (marker) {
       completed = offset;
       fence = { marker: marker[0], length: marker.length };
+    } else if (['[', '\\[', '$$'].includes(line.trim())) {
+      completed = offset;
+      mathClosing = line.trim() === '[' ? ']' : line.trim() === '\\[' ? '\\]' : '$$';
     } else if (newline >= 0 && (line.trim() === '' || /^ {0,3}#{1,6}(?:\s|$)/.test(line))) {
       completed = end;
     }

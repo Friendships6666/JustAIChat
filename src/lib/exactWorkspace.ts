@@ -1,6 +1,6 @@
 import type { Workspace } from '../types';
 
-const DATABASE = 'singleaichat-history';
+const DATABASE = 'justaichat-history';
 const STORE = 'workspaces';
 const KEY = 'active';
 let pendingWrite: Promise<void> = Promise.resolve();
@@ -11,9 +11,9 @@ function isWorkspace(value: unknown): value is Workspace {
   return data.version === 1 && Array.isArray(data.sessions) && data.sessions.length > 0;
 }
 
-function openDatabase(): Promise<IDBDatabase> {
+function openDatabase(name = DATABASE): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DATABASE, 1);
+    const request = indexedDB.open(name, 1);
     request.onupgradeneeded = () => request.result.createObjectStore(STORE);
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -23,7 +23,12 @@ function openDatabase(): Promise<IDBDatabase> {
 
 export async function loadExactWorkspace(): Promise<Workspace | null> {
   if (typeof indexedDB === 'undefined') return null;
-  const db = await openDatabase();
+  const saved = await readSnapshot(DATABASE);
+  return saved || await readSnapshot('singleaichat-history');
+}
+
+async function readSnapshot(name: string): Promise<Workspace | null> {
+  const db = await openDatabase(name);
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(STORE, 'readonly');
     const request = transaction.objectStore(STORE).get(KEY);
